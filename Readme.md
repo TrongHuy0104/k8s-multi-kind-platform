@@ -101,30 +101,48 @@ cd ../..
  
 ## Bước 2 — Apply manifests theo thứ tự
  
+Thứ tự triển khai rất quan trọng trong Kubernetes. Bạn phải đảm bảo các tài nguyên nền tảng (Namespace, Config, RBAC) được tạo ra trước khi các ứng dụng (Workload) cần đến chúng được khởi chạy.
+ 
 ```bash
-# Bước 0: Namespace trước tiên
+# 1. Khởi tạo Namespace
+# Namespace phải được tạo đầu tiên vì tất cả các resource khác đều nằm trong nó. 
+# Nếu không, K8s sẽ báo lỗi "namespace not found".
 kubectl apply -f manifests/00-namespace.yaml
  
-# Bước 0: Config và RBAC
+# 2. Cấu hình & Phân quyền (Config và RBAC)
+# Tạo Secret/ConfigMap để các Pod có thể đọc biến môi trường (như REDIS_PASSWORD).
+# Tạo Role và ServiceAccount trước để Pod có quyền truy cập API ngay khi khởi động.
 kubectl apply -f manifests/01-config.yaml
 kubectl apply -f manifests/01-rbac.yaml
  
-# Bước 1: Backend Relay + HPA
+# 3. Triển khai Backend Relay + HPA
+# Khởi chạy stateless application NestJS. Kèm theo đó là HPA để tự động scale Pod 
+# dựa trên CPU metric.
 kubectl apply -f manifests/02-backend.yaml
  
-# Bước 2: Redis StatefulSet + PriorityClass
+# 4. Triển khai Database (Redis StatefulSet)
+# Tạo StatefulSet cho Redis. Bao gồm cả PriorityClass đảm bảo Redis có độ ưu tiên cao
+# và không bị evict khi node cạn kiệt tài nguyên.
 kubectl apply -f manifests/03-redis.yaml
  
-# Bước 3: PodDisruptionBudget
+# 5. Áp dụng Policy (PodDisruptionBudget)
+# PDB giúp bảo vệ hệ thống bằng cách chặn thao tác xóa Pod hàng loạt, 
+# đảm bảo lúc nào cũng có ít nhất 1 Pod relay hoạt động.
 kubectl apply -f manifests/04-policy.yaml
  
-# Bước 4: Networking
+# 6. Mở cổng mạng (Networking)
+# Tạo ClusterIP Service, Gateway và HTTPRoute để định tuyến traffic HTTP
+# từ bên ngoài (qua port 80) vào Backend Relay.
 kubectl apply -f manifests/05-networking.yaml
  
-# Bước 5: NetworkPolicy
+# 7. Thiếp lập bảo mật mạng (NetworkPolicy)
+# Khóa toàn bộ Ingress traffic mặc định (Zero Trust) và chỉ mở một luồng duy nhất:
+# cho phép các Pod có label app=relay kết nối đến Redis ở port 6379.
 kubectl apply -f manifests/06-network-policy.yaml
  
-# Bước 6: CronJob + CRD
+# 8. Cấu hình các tài nguyên phụ trợ (CronJob + CRD)
+# Lên lịch backup Redis hàng ngày lúc 2AM. Định nghĩa một CRD tùy chỉnh để 
+# minh họa khả năng mở rộng API của K8s.
 kubectl apply -f manifests/07-extras.yaml
 ```
  

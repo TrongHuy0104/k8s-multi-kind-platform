@@ -45,7 +45,7 @@ spec:
       priorityClassName: critical-data   # Pod này có độ ưu tiên cao nhất
       containers:
         - name: redis
-          image: redis:7-alpine           # Tag cụ thể, không phải :latest
+          image: redis:7.2.4-alpine       # Tag cụ thể, không phải :latest
           command:
             - redis-server
             - --requirepass

@@ -4,9 +4,18 @@
  
 Lab này xây dựng một hệ thống microservices 2 tầng trên Kubernetes:
  
-- **Backend Relay** (NestJS): stateless app, scale theo CPU, kết nối Redis để cache
-- **Redis** (redis:7-alpine): stateful database, lưu trữ bền vững, độ ưu tiên cao nhất
-Toàn bộ chạy trong Namespace `k8s-platform-lab`, được bảo vệ bởi NetworkPolicy theo mô hình Zero Trust.
+1. **Backend Relay (NestJS)**: 
+   - **Vai trò**: Đóng vai trò là cổng giao tiếp API (stateless app) xử lý các logic trung gian. Nó nhận request từ người dùng thông qua Gateway, xử lý dữ liệu và giao tiếp với Redis để lưu trữ hoặc truy xuất bộ nhớ đệm (cache). 
+   - **Đặc tính**: Dễ dàng mở rộng (scale) theo CPU qua HorizontalPodAutoscaler do không lưu trữ state cục bộ.
+
+2. **Redis (StatefulSet)**: 
+   - **Vai trò**: Là hệ quản trị cơ sở dữ liệu in-memory tốc độ cao, đóng vai trò như một stateful database lưu trữ trạng thái của hệ thống hoặc cache.
+   - **Đặc tính**: Dữ liệu được duy trì bền vững qua PersistentVolume (PVC), hoạt động với độ ưu tiên cao nhất (`PriorityClass: critical-data`) để tránh bị kill khi node thiếu tài nguyên.
+
+3. **Gateway API & NetworkPolicy**:
+   - **Vai trò**: Quản lý luồng traffic. Gateway điều hướng traffic từ bên ngoài vào Backend Relay một cách an toàn. NetworkPolicy thiết lập rào chắn bảo vệ nội bộ theo mô hình Zero Trust, đảm bảo chỉ có Relay mới được phép nói chuyện với Redis.
+
+Toàn bộ chạy trong Namespace `k8s-platform-lab`, được bảo vệ nghiêm ngặt.
  
 ---
  
@@ -287,9 +296,38 @@ kubectl get pvc -n k8s-platform-lab
 # → STATUS: Bound
  
 # NetworkPolicy hoạt động (cần CNI=calico)
+
+### Các bước kiểm tra tính hiệu quả của NetworkPolicy (Zero Trust Validation)
+
+**Bước 1: Triển khai một Pod "kẻ gian" (Intruder)**
+Mục đích là tạo ra một Pod không hợp lệ (không có label `app: relay`) trong cùng một Namespace để kiểm chứng khả năng chặn traffic của NetworkPolicy.
+```bash
 kubectl run intruder --image=busybox:1.36 -n k8s-platform-lab -- sleep 3600
-kubectl exec -n k8s-platform-lab intruder -- \
-  nc -zv redis-0.redis-headless.k8s-platform-lab.svc.cluster.local 6379
-# → timeout (bị block)
+# Đợi Pod intruder chuyển sang trạng thái Ready
+kubectl wait pod intruder -n k8s-platform-lab --for=condition=Ready --timeout=30s
+```
+
+**Bước 2: Thử kết nối trái phép vào Redis từ Intruder**
+Mặc dù ở cùng Namespace, nhưng Intruder không có quyền truy cập Redis vì NetworkPolicy `allow-relay-to-redis` chỉ cho phép Pod có label `app: relay`.
+```bash
+kubectl exec -n k8s-platform-lab intruder -- nc -zv redis-0.redis-headless.k8s-platform-lab.svc.cluster.local 6379 -w 3
+# Kết quả mong đợi: Lệnh bị treo (timeout) do traffic bị DROP ở tầng network bởi Calico.
+# nc: connect to redis-0.redis-headless.k8s-platform-lab.svc.cluster.local port 6379 (tcp) timed out: Operation in progress
+```
+
+**Bước 3: Xác nhận Relay Pod có thể kết nối hợp lệ**
+Relay Pod có mang label `app: relay`, do đó traffic sẽ được đi qua.
+```bash
+# Lấy tên của một Pod relay đang chạy
+RELAY_POD=$(kubectl get pod -l app=relay -n k8s-platform-lab -o jsonpath="{.items[0].metadata.name}")
+# Thử ping Redis từ trong Relay Pod
+kubectl exec -n k8s-platform-lab $RELAY_POD -- sh -c 'echo "PING" | nc -w 1 redis-0.redis-headless.k8s-platform-lab.svc.cluster.local 6379'
+# Kết quả mong đợi:
+# +PONG
+```
+
+**Bước 4: Dọn dẹp Intruder Pod sau khi test**
+```bash
 kubectl delete pod intruder -n k8s-platform-lab
+```
 ```

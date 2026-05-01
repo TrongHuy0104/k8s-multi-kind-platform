@@ -9,15 +9,15 @@
  
 > Nhóm này trả lời câu hỏi: **"Ứng dụng chạy như thế nào?"**
  
-| Kind | API Group | Dùng trong lab | Mô tả |
+| Kind | API Group | Dùng trong lab | Mô tả & Ví dụ/Command |
 |------|-----------|---------------|-------|
-| `Deployment` | `apps/v1` | ✅ Backend Relay | Quản lý stateless app, rolling update, rollback. Tạo và giám sát ReplicaSet bên dưới. |
-| `StatefulSet` | `apps/v1` | ✅ Redis | Quản lý stateful app. Pod có tên ổn định (`redis-0`), PVC được giữ lại khi Pod restart. |
-| `ReplicaSet` | `apps/v1` | ⚙️ Tự động tạo bởi Deployment | Đảm bảo số lượng Pod replicas. Không nên tạo tay — để Deployment quản lý. |
-| `HorizontalPodAutoscaler` | `autoscaling/v2` | ✅ relay-hpa | Tự động scale số Pod theo CPU/memory. **Bắt buộc phải có `resources.requests` trong container, nếu không HPA hiện `<unknown>`.** Cần metrics-server (`minikube addons enable metrics-server`). |
-| `DaemonSet` | `apps/v1` | 📖 Tham chiếu | Chạy đúng 1 Pod trên mỗi Node. Dùng cho log collector, monitoring agent (Fluentd, Prometheus node-exporter). |
-| `Job` | `batch/v1` | ✅ redis-backup (one-time) | Chạy tác vụ đến khi hoàn thành rồi dừng. Khác Deployment ở chỗ Pod không restart sau khi success. |
-| `CronJob` | `batch/v1` | ✅ redis-backup (định kỳ) | Tạo Job theo lịch cron. Dùng cho backup, cleanup log định kỳ. |
+| `Deployment` | `apps/v1` | ✅ Backend Relay | Quản lý stateless app, rolling update, rollback. Tạo và giám sát ReplicaSet bên dưới.<br>**Lệnh:** `kubectl rollout status deployment relay -n k8s-platform-lab` |
+| `StatefulSet` | `apps/v1` | ✅ Redis | Quản lý stateful app. Pod có tên ổn định (`redis-0`), PVC được giữ lại khi Pod restart.<br>**Lệnh:** `kubectl scale sts redis --replicas=3 -n k8s-platform-lab` |
+| `ReplicaSet` | `apps/v1` | ⚙️ Tự động tạo bởi Deployment | Đảm bảo số lượng Pod replicas. Không nên tạo tay — để Deployment quản lý.<br>**Lệnh:** `kubectl get rs -n k8s-platform-lab` |
+| `HorizontalPodAutoscaler` | `autoscaling/v2` | ✅ relay-hpa | Tự động scale số Pod theo CPU/memory. Bắt buộc phải có `resources.requests`.<br>**Lệnh:** `kubectl get hpa relay-hpa -n k8s-platform-lab -w` |
+| `DaemonSet` | `apps/v1` | 📖 Tham chiếu | Chạy đúng 1 Pod trên mỗi Node. Dùng cho log collector, monitoring agent.<br>**Lệnh:** `kubectl get ds -n kube-system` |
+| `Job` | `batch/v1` | ✅ redis-backup (one-time) | Chạy tác vụ đến khi hoàn thành rồi dừng.<br>**Lệnh:** `kubectl wait --for=condition=complete job/manual-backup` |
+| `CronJob` | `batch/v1` | ✅ redis-backup (định kỳ) | Tạo Job theo lịch cron. Dùng cho backup, cleanup log định kỳ.<br>**Lệnh:** `kubectl create job --from=cronjob/redis-backup manual-backup -n k8s-platform-lab` |
  
 ---
  
@@ -25,14 +25,14 @@
  
 > Nhóm này trả lời câu hỏi: **"Data ở đâu và tồn tại bao lâu?"**
  
-| Kind | API Group | Dùng trong lab | Mô tả |
+| Kind | API Group | Dùng trong lab | Mô tả & Ví dụ/Command |
 |------|-----------|---------------|-------|
-| `PersistentVolume` | `v1` | ⚙️ Tự động tạo bởi StorageClass | Đại diện cho một đơn vị storage thực tế (disk, NFS, cloud volume). Tồn tại độc lập với Pod và Namespace. |
-| `PersistentVolumeClaim` | `v1` | ✅ redis-data (qua volumeClaimTemplates) | Yêu cầu storage từ PV. StatefulSet tạo 1 PVC riêng cho mỗi Pod replica. **PVC ở trạng thái `Bound` nghĩa là đã được cấp phát thành công.** |
-| `StorageClass` | `storage.k8s.io/v1` | ⚙️ standard (minikube mặc định) | Định nghĩa loại storage và cách cấp phát động. Minikube dùng `standard` với `hostPath`. |
-| `VolumeSnapshot` | `snapshot.storage.k8s.io/v1` | 📖 Tham chiếu | Tạo snapshot tại một thời điểm của PVC. **Cần cài VolumeSnapshot CRD và snapshot controller riêng — không có sẵn trong minikube mặc định.** |
-| `ConfigMap` | `v1` | ✅ relay-config | Lưu cấu hình không nhạy cảm (host, port). Inject vào Pod qua `envFrom` hoặc volume mount. |
-| `Secret` | `v1` | ✅ redis-secret | Lưu thông tin nhạy cảm (password, token) dưới dạng base64. **Không commit Secret YAML lên git — dùng Sealed Secrets hoặc External Secrets trong production.** |
+| `PersistentVolume` | `v1` | ⚙️ Tự động tạo bởi StorageClass | Đại diện cho một đơn vị storage thực tế.<br>**Lệnh:** `kubectl get pv` |
+| `PersistentVolumeClaim` | `v1` | ✅ redis-data | Yêu cầu storage từ PV. PVC ở trạng thái `Bound` là thành công.<br>**Lệnh:** `kubectl get pvc redis-data-redis-0 -n k8s-platform-lab` |
+| `StorageClass` | `storage.k8s.io/v1` | ⚙️ standard | Định nghĩa loại storage và cách cấp phát động.<br>**Lệnh:** `kubectl get sc` |
+| `VolumeSnapshot` | `snapshot.storage.k8s.io/v1` | 📖 Tham chiếu | Tạo snapshot tại một thời điểm của PVC.<br>**Lệnh:** `kubectl get volumesnapshot` |
+| `ConfigMap` | `v1` | ✅ relay-config | Lưu cấu hình không nhạy cảm (host, port).<br>**Lệnh:** `kubectl describe cm relay-config -n k8s-platform-lab` |
+| `Secret` | `v1` | ✅ redis-secret | Lưu thông tin nhạy cảm. Không commit lên git.<br>**Lệnh:** `kubectl get secret relay-secret -n k8s-platform-lab -o jsonpath='{.data.REDIS_PASSWORD}' | base64 -d` |
  
 ---
  
@@ -40,17 +40,17 @@
  
 > Nhóm này trả lời câu hỏi: **"Traffic đi vào và ra như thế nào?"**
  
-| Kind | API Group | Dùng trong lab | Mô tả |
+| Kind | API Group | Dùng trong lab | Mô tả & Ví dụ/Command |
 |------|-----------|---------------|-------|
-| `Service` (ClusterIP) | `v1` | ✅ relay-service, redis | Expose Pod ra bên trong cluster qua IP ổn định. Load balance traffic đến các Pod theo label selector. |
-| `Service` (Headless) | `v1` | ✅ redis-headless | `clusterIP: None` — không load balance, DNS trả về IP từng Pod. **Bắt buộc cho StatefulSet** để tạo DNS record `redis-0.redis-headless.<namespace>.svc.cluster.local`. |
-| `Endpoints` | `v1` | ⚙️ Tự động tạo bởi Service | Lưu danh sách IP:Port của các Pod khớp với selector của Service. Kiểm tra bằng `kubectl get endpoints`. |
-| `EndpointSlice` | `discovery.k8s.io/v1` | ⚙️ Tự động tạo bởi Service | Phiên bản mới hơn của Endpoints, hỗ trợ cluster lớn tốt hơn. Tự động tạo khi tạo Service. |
-| `Ingress` | `networking.k8s.io/v1` | 📖 Thay thế bởi Gateway API | Route HTTP traffic từ ngoài vào Service. Cần Ingress Controller (nginx, traefik). |
-| `IngressClass` | `networking.k8s.io/v1` | 📖 Tham chiếu | Xác định controller nào xử lý Ingress resource. |
-| `Gateway` | `gateway.networking.k8s.io/v1` | ✅ platform-gateway | Thế hệ mới thay thế Ingress. Phân tách vai trò: platform admin quản lý Gateway, dev quản lý HTTPRoute. **Cần cài Gateway Controller (nginx-gateway, istio).** |
-| `HTTPRoute` | `gateway.networking.k8s.io/v1` | ✅ relay-route | Định nghĩa routing rule cho HTTP traffic. Gắn vào Gateway qua `parentRefs`. |
-| `NetworkPolicy` | `networking.k8s.io/v1` | ✅ default-deny-all, allow-relay-to-redis | Firewall ở tầng Pod. **Chỉ hoạt động khi CNI hỗ trợ (Calico, Cilium). Minikube và kind mặc định dùng CNI không enforce NetworkPolicy — phải khởi động lại với `--cni=calico`.** |
+| `Service` (ClusterIP) | `v1` | ✅ relay-service | Expose Pod ra bên trong cluster qua IP ổn định.<br>**Lệnh:** `kubectl port-forward svc/relay-service 3000:80 -n k8s-platform-lab` |
+| `Service` (Headless) | `v1` | ✅ redis-headless | Trả về IP trực tiếp của từng Pod thay vì load balance.<br>**Lệnh:** `kubectl exec -it relay-xxx -- nslookup redis-headless` |
+| `Endpoints` | `v1` | ⚙️ Tự động | Lưu danh sách IP:Port của các Pod.<br>**Lệnh:** `kubectl get endpoints -n k8s-platform-lab` |
+| `EndpointSlice` | `discovery.k8s.io/v1` | ⚙️ Tự động | Bản tối ưu của Endpoints cho cluster lớn.<br>**Lệnh:** `kubectl get endpointslice -n k8s-platform-lab` |
+| `Ingress` | `networking.k8s.io/v1` | 📖 Thay thế | Route HTTP traffic (được thay bằng Gateway).<br>**Lệnh:** `kubectl get ingress` |
+| `IngressClass` | `networking.k8s.io/v1` | 📖 Tham chiếu | Xác định controller Ingress. |
+| `Gateway` | `gateway.networking.k8s.io/v1` | ✅ platform-gateway | Thay thế Ingress API, phân tách quản trị.<br>**Lệnh:** `kubectl get gateway -n k8s-platform-lab` |
+| `HTTPRoute` | `gateway.networking.k8s.io/v1` | ✅ relay-route | Routing rule HTTP gắn vào Gateway.<br>**Lệnh:** `kubectl describe httproute relay-route -n k8s-platform-lab` |
+| `NetworkPolicy` | `networking.k8s.io/v1` | ✅ default-deny-all | Firewall nội bộ giữa các Pod. Cần CNI (Calico).<br>**Lệnh:** `kubectl get netpol -n k8s-platform-lab` |
  
 ---
  
@@ -58,13 +58,13 @@
  
 > Nhóm này trả lời câu hỏi: **"Hệ thống được bảo vệ khỏi sự cố vận hành như thế nào?"**
  
-| Kind | API Group | Dùng trong lab | Mô tả |
+| Kind | API Group | Dùng trong lab | Mô tả & Ví dụ/Command |
 |------|-----------|---------------|-------|
-| `PodDisruptionBudget` | `policy/v1` | ✅ relay-pdb | Giới hạn số Pod bị xóa cùng lúc khi `kubectl drain` node. **Nếu không có PDB, drain node có thể xóa toàn bộ replicas cùng lúc gây downtime.** `minAvailable: 1` đảm bảo luôn có ít nhất 1 Pod chạy. |
-| `PriorityClass` | `scheduling.k8s.io/v1` | ✅ critical-data (value: 1000000) | Đặt độ ưu tiên cho Pod. Khi node thiếu RAM, K8s evict Pod có priority thấp trước. **Redis cần priority cao nhất để không bị evict trước các app thông thường.** |
-| `LimitRange` | `v1` | 📖 Tham chiếu | Đặt default và max resource cho Pod/Container trong Namespace. Phòng trường hợp dev quên khai báo `resources`. |
-| `ResourceQuota` | `v1` | 📖 Tham chiếu | Giới hạn tổng tài nguyên (CPU, memory, số Pod) được dùng trong một Namespace. Dùng trong môi trường multi-tenant. |
-| `RuntimeClass` | `node.k8s.io/v1` | 📖 Nice-to-have | Chọn container runtime (gVisor, Kata Containers) cho Pod. Tăng bảo mật bằng cách cô lập kernel. |
+| `PodDisruptionBudget` | `policy/v1` | ✅ relay-pdb | Đảm bảo luôn có tối thiểu Pod chạy khi node bảo trì.<br>**Lệnh:** `kubectl get pdb relay-pdb -n k8s-platform-lab` |
+| `PriorityClass` | `scheduling.k8s.io/v1` | ✅ critical-data | Quyết định Pod nào bị xóa khi node thiếu RAM.<br>**Lệnh:** `kubectl get priorityclass critical-data` |
+| `LimitRange` | `v1` | 📖 Tham chiếu | Đặt mặc định Resource cho Pod trong Namespace.<br>**Lệnh:** `kubectl describe limitrange -n default` |
+| `ResourceQuota` | `v1` | 📖 Tham chiếu | Giới hạn tổng tài nguyên của Namespace.<br>**Lệnh:** `kubectl get quota -n k8s-platform-lab` |
+| `RuntimeClass` | `node.k8s.io/v1` | 📖 Tham chiếu | Chọn container runtime (gVisor, Kata). |
  
 ---
  
@@ -72,13 +72,13 @@
  
 > Nhóm này trả lời câu hỏi: **"Ai được làm gì trong cluster?"**
  
-| Kind | API Group | Dùng trong lab | Mô tả |
+| Kind | API Group | Dùng trong lab | Mô tả & Ví dụ/Command |
 |------|-----------|---------------|-------|
-| `ServiceAccount` | `v1` | ✅ relay-sa | Định danh cho Pod khi gọi K8s API. **Mỗi app nên có ServiceAccount riêng** thay vì dùng `default` SA — tuân theo nguyên tắc least privilege. |
-| `Role` | `rbac.authorization.k8s.io/v1` | ✅ relay-event-reader | Tập hợp quyền trong một Namespace cụ thể. Dùng `Role` thay vì `ClusterRole` khi không cần quyền cluster-wide. |
-| `RoleBinding` | `rbac.authorization.k8s.io/v1` | ✅ relay-event-reader-binding | Gán Role cho ServiceAccount/User/Group trong một Namespace. |
-| `ClusterRole` | `rbac.authorization.k8s.io/v1` | 📖 Tham chiếu | Tập hợp quyền áp dụng toàn cluster hoặc cho non-namespaced resources (Node, PV). |
-| `ClusterRoleBinding` | `rbac.authorization.k8s.io/v1` | 📖 Tham chiếu | Gán ClusterRole cho subject ở cấp cluster. |
+| `ServiceAccount` | `v1` | ✅ relay-sa | Định danh cho Pod khi gọi K8s API.<br>**Lệnh:** `kubectl get sa relay-sa -n k8s-platform-lab` |
+| `Role` | `rbac.authorization.k8s.io/v1` | ✅ relay-event-reader | Tập quyền trong Namespace.<br>**Lệnh:** `kubectl describe role relay-event-reader -n k8s-platform-lab` |
+| `RoleBinding` | `rbac.authorization.k8s.io/v1` | ✅ relay-event-binding | Gắn Role cho ServiceAccount.<br>**Lệnh:** `kubectl get rolebinding -n k8s-platform-lab` |
+| `ClusterRole` | `rbac.authorization.k8s.io/v1` | 📖 Tham chiếu | Quyền áp dụng toàn Cluster.<br>**Lệnh:** `kubectl get clusterrole` |
+| `ClusterRoleBinding` | `rbac.authorization.k8s.io/v1` | 📖 Tham chiếu | Gắn ClusterRole toàn Cluster.<br>**Lệnh:** `kubectl get clusterrolebinding` |
  
 **Kiểm tra quyền:**
 ```bash
@@ -94,14 +94,14 @@ kubectl auth can-i get events \
  
 > Nhóm này trả lời câu hỏi: **"Cluster được tổ chức và quan sát như thế nào?"**
  
-| Kind | API Group | Dùng trong lab | Mô tả |
+| Kind | API Group | Dùng trong lab | Mô tả & Ví dụ/Command |
 |------|-----------|---------------|-------|
-| `Namespace` | `v1` | ✅ k8s-platform-lab | Cô lập tài nguyên. `kubectl delete namespace` xóa sạch toàn bộ tài nguyên bên trong — tiện cho lab. |
-| `Node` | `v1` | 📖 Quan sát | Đại diện cho máy chủ vật lý/VM trong cluster. Kiểm tra bằng `kubectl get nodes -o wide`. |
-| `Event` | `v1` | ✅ relay-sa có quyền đọc | Ghi lại các sự kiện trong cluster (Pod scheduled, image pulled, lỗi...). Dùng `kubectl get events --watch` để debug real-time. |
-| `CustomResourceDefinition` | `apiextensions.k8s.io/v1` | ✅ StarCiApp CRD | Mở rộng K8s API với resource tùy chỉnh. Là nền tảng của mọi K8s operator (ArgoCD, Prometheus, Istio đều dùng CRD). |
-| `MutatingWebhookConfiguration` | `admissionregistration.k8s.io/v1` | 📖 Tham chiếu | Tự động inject sidecar (Istio envoy) hoặc modify resource trước khi lưu vào etcd. |
-| `ValidatingWebhookConfiguration` | `admissionregistration.k8s.io/v1` | 📖 Tham chiếu | Validate resource trước khi tạo. Dùng để enforce policy (không cho tạo Pod không có `requests`). |
+| `Namespace` | `v1` | ✅ k8s-platform-lab | Cô lập tài nguyên.<br>**Lệnh:** `kubectl get ns k8s-platform-lab` |
+| `Node` | `v1` | 📖 Quan sát | Máy chủ trong cluster.<br>**Lệnh:** `kubectl get nodes -o wide` |
+| `Event` | `v1` | ✅ relay-sa có quyền | Sự kiện hệ thống.<br>**Lệnh:** `kubectl get events -n k8s-platform-lab --sort-by='.metadata.creationTimestamp'` |
+| `CustomResourceDefinition` | `apiextensions.../v1` | ✅ StarCiApp CRD | Mở rộng API.<br>**Lệnh:** `kubectl get crd starciapps.platform.lab` |
+| `MutatingWebhookConfiguration` | `admission.../v1` | 📖 Tham chiếu | Inject sidecar tự động. |
+| `ValidatingWebhookConfiguration` | `admission.../v1` | 📖 Tham chiếu | Validate resource trước khi lưu. |
  
 ---
  
