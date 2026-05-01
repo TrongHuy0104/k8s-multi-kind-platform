@@ -1,0 +1,60 @@
+# 1. Chặn TẤT CẢ ingress traffic vào namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: k8s-platform-lab
+spec:
+  podSelector: {}          # Áp dụng cho toàn bộ Pod
+  policyTypes:
+    - Ingress
+---
+# 2. Chỉ cho phép relay kết nối vào Redis port 6379
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-relay-to-redis
+  namespace: k8s-platform-lab
+spec:
+  podSelector:
+    matchLabels:
+      app: redis           # Policy này áp dụng cho Redis Pod
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: relay   # Chỉ Pod có label app:relay mới được vào
+      ports:
+        - port: 6379
+---
+# 3. Cho phép traffic từ Gateway vào relay
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-gateway-to-relay
+  namespace: k8s-platform-lab
+spec:
+  podSelector:
+    matchLabels:
+      app: relay
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - port: 3000
+
+# đảm bảo bạn đã cài CNI calico
+# minikube start --cni=calico --driver=docker
+
+# Tạo Pod "lạ" để test
+# kubectl run intruder --image=busybox:1.36 -n k8s-platform-lab -- sleep 3600
+
+# Thử kết nối vào Redis từ Pod không có label app:relay
+# kubectl exec -n k8s-platform-lab intruder -- \
+#   nc -zv redis-0.redis-headless.k8s-platform-lab.svc.cluster.local 6379
+# Kết quả: Connection refused hoặc timeout → NetworkPolicy hoạt động đúng
+
+# Cleanup
+# kubectl delete pod intruder -n k8s-platform-lab

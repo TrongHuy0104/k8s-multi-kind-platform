@@ -1,0 +1,63 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: redis-backup
+  namespace: k8s-platform-lab
+  labels:
+    app: redis
+    component: backup
+spec:
+  schedule: "0 2 * * *"      # Chạy lúc 2am hàng ngày
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: relay        # Cần label này để NetworkPolicy cho phép vào Redis
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: redis:7-alpine
+              command:
+                - sh
+                - -c
+                - |
+                  redis-cli -h redis-0.redis-headless.k8s-platform-lab.svc.cluster.local \
+                    -a $REDIS_PASSWORD BGSAVE
+                  echo "Backup triggered at $(date)"
+              env:
+                - name: REDIS_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: redis-secret
+                      key: REDIS_PASSWORD
+---
+# Custom Resource Definition (CRD) mẫu
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: starciapps.platform.lab
+spec:
+  group: platform.lab
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                image:
+                  type: string
+                replicas:
+                  type: integer
+                  minimum: 1
+  scope: Namespaced
+  names:
+    plural: starciapps
+    singular: starciapp
+    kind: StarCiApp

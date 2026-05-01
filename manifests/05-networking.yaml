@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: relay-service
+  namespace: k8s-platform-lab
+  labels:
+    app: relay
+    component: service
+spec:
+  selector:
+    app: relay
+  ports:
+    - port: 80
+      targetPort: 3000
+      protocol: TCP
+  type: ClusterIP
+---
+# Gateway API (cần cài Gateway Controller trước, ví dụ: istio hoặc nginx-gateway)
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: platform-gateway
+  namespace: k8s-platform-lab
+spec:
+  gatewayClassName: nginx        # Tùy thuộc controller bạn cài
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: relay-route
+  namespace: k8s-platform-lab
+spec:
+  parentRefs:
+    - name: platform-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: relay-service
+          port: 80
+
+# 1. Cài Gateway API CRDs
+#    kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml
+
+#  kubectl get crds | findstr gateway

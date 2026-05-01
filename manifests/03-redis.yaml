@@ -1,0 +1,80 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: critical-data
+value: 1000000
+globalDefault: false
+description: "Dành cho database pods, không bị evict khi node thiếu tài nguyên"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-headless
+  namespace: k8s-platform-lab
+  labels:
+    app: redis
+spec:
+  clusterIP: None          # Headless: DNS trả về IP của từng Pod
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: k8s-platform-lab
+  labels:
+    app: redis
+    component: database
+    version: "7"
+spec:
+  serviceName: redis-headless    # Liên kết với Headless Service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        component: database
+    spec:
+      priorityClassName: critical-data   # Pod này có độ ưu tiên cao nhất
+      containers:
+        - name: redis
+          image: redis:7-alpine           # Tag cụ thể, không phải :latest
+          command:
+            - redis-server
+            - --requirepass
+            - $(REDIS_PASSWORD)
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: relay-secret
+                  key: REDIS_PASSWORD
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "300m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+  volumeClaimTemplates:           # Mỗi Pod StatefulSet có PVC riêng
+    - metadata:
+        name: redis-data
+        labels:
+          app: redis
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

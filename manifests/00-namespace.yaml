@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: k8s-platform-lab
+  labels:
+    app.kubernetes.io/managed-by: kubectl
+    environment: lab

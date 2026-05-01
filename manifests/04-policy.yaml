@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: relay-pdb
+  namespace: k8s-platform-lab
+  labels:
+    app: relay
+    component: policy
+spec:
+  minAvailable: 1          # Luôn phải có ít nhất 1 Pod chạy
+  selector:
+    matchLabels:
+      app: relay
